@@ -74,3 +74,22 @@ export interface UserUsageResponse {
   "gpt-4-32k": ModelUsage;
   startOfMonth: string; // ISO date string
 }
+
+/**
+ * Represents a single line item in the monthly invoice.
+ */
+export interface MonthlyInvoiceItem {
+  description: string;
+  cents: number;
+}
+
+/**
+ * Represents the response from /api/dashboard/get-monthly-invoice endpoint.
+ */
+export interface MonthlyInvoiceResponse {
+  items: MonthlyInvoiceItem[];
+  pricingDescription?: { id: string };
+  lastHardLimitCents: number;
+  periodStartMs: string;
+  periodEndMs: string;
+}

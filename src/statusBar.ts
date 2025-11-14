@@ -45,6 +45,7 @@ export function updateStatusBar(
   }
 
   const warningThreshold = totalRequests * 0.1; // 10%
+  const hasUnknownLimits = totalRequests === 0;
   let icon = "$(zap)";
 
   // Reset background color before setting it.
@@ -63,8 +64,11 @@ export function updateStatusBar(
   // Determine warning/error states based on current display mode
   let shouldShowError = false;
   let shouldShowWarning = false;
-
-  if (remainingRequests > 0) {
+  if (hasUnknownLimits) {
+    // When limits are unknown: base colors on spending status
+    shouldShowError = isOverSpendLimit;
+    shouldShowWarning = isCloseToSpendLimit && !isOverSpendLimit;
+  } else if (remainingRequests > 0) {
     // When showing requests: base colors on request status
     const isLowOnRequests = remainingRequests <= warningThreshold;
     shouldShowWarning = isLowOnRequests;
@@ -89,10 +93,15 @@ export function updateStatusBar(
   }
 
   // Build status text - primary display is remaining requests
-  // Only show spending when there are 0 requests left
+  // Show spending when limits are unknown or when there are 0 requests left
   let statusText: string;
 
-  if (remainingRequests > 0) {
+  if (hasUnknownLimits && spendCents !== undefined && hardLimitDollars !== undefined) {
+    // Unknown limits - show spending
+    const spendDollars = (spendCents / 100).toFixed(2);
+    const limitDollars = hardLimitDollars.toFixed(2);
+    statusText = `${icon} $${spendDollars}/$${limitDollars}`;
+  } else if (remainingRequests > 0) {
     // Show remaining requests
     statusText = `${icon} ${remainingRequests}`;
   } else {
@@ -138,13 +147,16 @@ function updateTooltip(
     return;
   }
 
-  const usedRequests = totalRequests - remainingRequests;
-  const requestPercentage = ((usedRequests / totalRequests) * 100).toFixed(1);
+  const hasKnownLimits = totalRequests > 0;
+  const usedRequests = hasKnownLimits ? totalRequests - remainingRequests : 0;
+  const requestPercentage = hasKnownLimits
+    ? ((usedRequests / totalRequests) * 100).toFixed(1)
+    : "0.0";
 
   // Calculate cycle information once if resetInfo is available
   let daysElapsed = 0;
   let dailyUsageRate = 0;
-  if (resetInfo && resetInfo.daysRemaining > 0) {
+  if (resetInfo && resetInfo.daysRemaining > 0 && hasKnownLimits) {
     const startOfCycle = new Date(resetInfo.resetDate);
     startOfCycle.setMonth(startOfCycle.getMonth() - 1); // Go back one month to get start
 
@@ -184,12 +196,12 @@ function updateTooltip(
         tooltip += `⚠️ At current rate, quota exhausted in ~${estimatedDaysLeft} days\n`;
       }
     }
-
-    tooltip += "\n";
   }
 
   // Add main request stats
-  tooltip += `Fast Premium Requests: ${remainingRequests}/${totalRequests} remaining (${requestPercentage}% used)`;
+  if (hasKnownLimits) {
+    tooltip += `Fast Premium Requests: ${remainingRequests}/${totalRequests} remaining (${requestPercentage}% used)`;
+  }
 
   if (spendCents !== undefined && hardLimitDollars !== undefined) {
     const spendDollars = spendCents / 100;
@@ -202,7 +214,7 @@ function updateTooltip(
     tooltip += `\nRemaining budget: $${remainingDollars}`;
 
     // Add relevant warnings based on current state
-    if (remainingRequests > 0) {
+    if (remainingRequests > 0 && hasKnownLimits) {
       // When showing requests, warn about low requests
       if (remainingRequests <= totalRequests * 0.1) {
         tooltip += `\n⚠️ Low on requests`;

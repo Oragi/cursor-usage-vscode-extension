@@ -211,12 +211,43 @@ async function refreshUsage(context: vscode.ExtensionContext): Promise<void> {
     let spendCents: number | undefined;
     let hardLimitDollars: number | undefined;
 
+    let displayTotalRequests = maxRequests;
     if (!mySpend || typeof mySpend.fastPremiumRequests !== "number") {
       // INDIVIDUAL FLOW: Use individual user API data - works for solo users or when team API fails
       const gpt4Usage = userUsage["gpt-4"];
       usedRequests = gpt4Usage.numRequests;
       spendCents = undefined; // Individual users don't have spending data in team API
       hardLimitDollars = undefined;
+
+      // On-demand usage from https://cursor.com/dashboard?tab=usage
+      if (gpt4Usage.numRequests === 0 && gpt4Usage.numRequestsTotal === 0 && gpt4Usage.maxTokenUsage === null && gpt4Usage.maxRequestUsage === null) {
+        displayTotalRequests = 0;
+
+        try {
+          const startDate = new Date(userUsage.startOfMonth);
+          const invoiceMonth = startDate.getMonth() + 1;
+          const invoiceYear = startDate.getFullYear();
+          const invoice = await api.fetchMonthlyInvoice(cookie, invoiceMonth, invoiceYear);
+
+          if (invoice && Array.isArray(invoice.items)) {
+            const totalCents = invoice.items.reduce((sum, item) => {
+              if (typeof item.cents !== "number") return sum;
+              if (typeof item.description === "string" && item.description.includes("Mid-month usage")) return sum;
+              return sum + item.cents;
+            }, 0);
+
+            if (totalCents > 0) spendCents = totalCents;
+          }
+
+          if (invoice && typeof invoice.lastHardLimitCents === "number") {
+            hardLimitDollars = invoice.lastHardLimitCents / 100;
+          }
+        } catch (invoiceError: any) {
+          console.warn(
+            `[Cursor Usage] Failed to fetch monthly invoice: ${invoiceError.message}`
+          );
+        }
+      }
     } else {
       // TEAM FLOW: Use team-based data when available
       usedRequests = mySpend.fastPremiumRequests;
@@ -228,9 +259,10 @@ async function refreshUsage(context: vscode.ExtensionContext): Promise<void> {
     const remainingRequests = Math.max(0, maxRequests - usedRequests);
     const resetInfo = calculateResetInfo(userUsage.startOfMonth);
 
+
     statusBar.updateStatusBar(
       remainingRequests,
-      maxRequests,
+      displayTotalRequests,
       spendCents,
       hardLimitDollars,
       resetInfo

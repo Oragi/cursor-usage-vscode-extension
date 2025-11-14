@@ -1,5 +1,5 @@
 import * as https from "https";
-import { TeamsResponse, TeamDetails, SpendData, UserMeResponse, UserUsageResponse } from "./models";
+import { TeamsResponse, TeamDetails, SpendData, UserMeResponse, UserUsageResponse, MonthlyInvoiceResponse } from "./models";
 
 const BASE_URL = "https://cursor.com/api";
 
@@ -119,4 +119,13 @@ export async function fetchUserMe(cookie: string): Promise<UserMeResponse> {
 /** Fetches the current user's usage data from /api/usage?user=USER_ID. */
 export async function fetchUserUsage(userId: string, cookie: string): Promise<UserUsageResponse> {
   return get<UserUsageResponse>(`usage?user=${userId}`, cookie);
+}
+
+/** Fetches the current user's monthly invoice data from /api/dashboard/get-monthly-invoice. */
+export async function fetchMonthlyInvoice(
+  cookie: string,
+  month: number,
+  year: number
+): Promise<MonthlyInvoiceResponse> {
+  return post<MonthlyInvoiceResponse>("dashboard/get-monthly-invoice", cookie, { month, year });
 }
